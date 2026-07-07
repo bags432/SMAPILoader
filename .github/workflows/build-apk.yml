@@ -1,0 +1,100 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: Build configuration
+        required: true
+        default: Release
+        type: choice
+        options:
+          - Release
+          - Debug
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    name: Build SMAPIGameLoader APK
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      SMAPI_ANDROID_DEPENDENCIES_ZIP_BASE64: ${{ secrets.SMAPI_ANDROID_DEPENDENCIES_ZIP_BASE64 }}
+      CONFIGURATION: ${{ github.event.inputs.configuration || 'Release' }}
+      PROJECT_PATH: SMAPIGameLoader/SMAPIGameLoader.csproj
+      DEPENDENCIES_ROOT: ${{ github.workspace }}/SMAPI-Android-1.6
+
+    steps:
+      - name: Checkout SMAPILoader
+        uses: actions/checkout@v4
+        with:
+          path: SMAPILoader
+
+      - name: Checkout SMAPI Android dependencies
+        if: ${{ vars.SMAPI_ANDROID_REPOSITORY != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SMAPI_ANDROID_REPOSITORY }}
+          token: ${{ secrets.SMAPI_ANDROID_REPOSITORY_TOKEN || github.token }}
+          path: SMAPI-Android-1.6
+
+      - name: Restore SMAPI Android dependencies from secret archive
+        if: ${{ env.SMAPI_ANDROID_DEPENDENCIES_ZIP_BASE64 != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$DEPENDENCIES_ROOT"
+          echo "$SMAPI_ANDROID_DEPENDENCIES_ZIP_BASE64" | base64 --decode > /tmp/smapi-android-dependencies.zip
+          unzip -q /tmp/smapi-android-dependencies.zip -d "$DEPENDENCIES_ROOT"
+        env:
+          SMAPI_ANDROID_DEPENDENCIES_ZIP_BASE64: ${{ secrets.SMAPI_ANDROID_DEPENDENCIES_ZIP_BASE64 }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: SMAPILoader/global.json
+
+      - name: Install .NET Android workload
+        run: dotnet workload install android
+
+      - name: Verify external game dependency assemblies
+        working-directory: SMAPILoader
+        shell: bash
+        run: |
+          set -euo pipefail
+          for dll in \
+            ../SMAPI-Android-1.6/src/DependenciesDll/MonoGame.Framework.dll \
+            ../SMAPI-Android-1.6/src/DependenciesDll/StardewValley.dll \
+            ../SMAPI-Android-1.6/src/DependenciesDll/StardewValley.GameData.dll
+          do
+            test -f "$dll" || { echo "Missing required dependency: $dll"; exit 1; }
+          done
+
+      - name: Restore NuGet packages
+        working-directory: SMAPILoader
+        run: dotnet restore "$PROJECT_PATH"
+
+      - name: Publish APK
+        working-directory: SMAPILoader
+        run: >-
+          dotnet publish "$PROJECT_PATH"
+          --configuration "$CONFIGURATION"
+          --framework net9.0-android
+          --no-restore
+          /p:AndroidPackageFormat=apk
+
+      - name: Collect APK artifact
+        working-directory: SMAPILoader
+        shell: bash
