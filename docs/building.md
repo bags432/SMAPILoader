@@ -117,6 +117,30 @@ The csproj references them at:
 
 Ensure these files exist before building.
 
+### GitHub Actions dependency source
+
+The GitHub Actions workflow cannot generate or download the game DLLs by itself. Before running the workflow, configure one of these dependency sources:
+
+1. Repository variable `SMAPI_ANDROID_REPOSITORY`: a repository containing `src/DependenciesDll/MonoGame.Framework.dll`, `src/DependenciesDll/StardewValley.dll`, and `src/DependenciesDll/StardewValley.GameData.dll`.
+2. Repository secret `SMAPI_ANDROID_DEPENDENCIES_ZIP_BASE64`: a base64-encoded zip containing either `src/DependenciesDll/...` directly or a top-level `SMAPI-Android-1.6/src/DependenciesDll/...` folder.
+
+From a local `SMAPI-Android-1.6` checkout, create the secret payload on Linux/macOS:
+
+```bash
+zip -r smapi-android-dependencies.zip src/DependenciesDll
+base64 -w0 smapi-android-dependencies.zip > smapi-android-dependencies.zip.base64
+```
+
+On Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force -Path ci-deps/src | Out-Null
+Copy-Item -Recurse -Force src/DependenciesDll ci-deps/src/
+Compress-Archive -Force -Path ci-deps/src -DestinationPath smapi-android-dependencies.zip
+[Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path smapi-android-dependencies.zip))) |
+    Set-Content -NoNewline smapi-android-dependencies.zip.base64
+```
+
 ## 5. Build the Loader APK
 
 ### Linux

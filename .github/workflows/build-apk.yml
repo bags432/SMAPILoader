@@ -49,9 +49,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          tmp_dependencies="$(mktemp -d)"
           mkdir -p "$DEPENDENCIES_ROOT"
           echo "$SMAPI_ANDROID_DEPENDENCIES_ZIP_BASE64" | base64 --decode > /tmp/smapi-android-dependencies.zip
-          unzip -q /tmp/smapi-android-dependencies.zip -d "$DEPENDENCIES_ROOT"
+          unzip -q /tmp/smapi-android-dependencies.zip -d "$tmp_dependencies"
+
+          if [[ -d "$tmp_dependencies/src/DependenciesDll" ]]; then
+            cp -a "$tmp_dependencies/." "$DEPENDENCIES_ROOT/"
+          elif [[ -d "$tmp_dependencies/SMAPI-Android-1.6/src/DependenciesDll" ]]; then
+            cp -a "$tmp_dependencies/SMAPI-Android-1.6/." "$DEPENDENCIES_ROOT/"
+          else
+            echo "::error title=Invalid SMAPI Android dependency archive::Archive must contain src/DependenciesDll directly or under SMAPI-Android-1.6/."
+            find "$tmp_dependencies" -maxdepth 3 -type d -print
+            exit 1
+          fi
         env:
           SMAPI_ANDROID_DEPENDENCIES_ZIP_BASE64: ${{ secrets.SMAPI_ANDROID_DEPENDENCIES_ZIP_BASE64 }}
 
@@ -74,17 +85,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          missing=0
           for dll in \
-            ../SMAPI-Android-1.6/src/DependenciesDll/MonoGame.Framework.dll \
-            ../SMAPI-Android-1.6/src/DependenciesDll/StardewValley.dll \
-            ../SMAPI-Android-1.6/src/DependenciesDll/StardewValley.GameData.dll
+            "$DEPENDENCIES_ROOT/src/DependenciesDll/MonoGame.Framework.dll" \
+            "$DEPENDENCIES_ROOT/src/DependenciesDll/StardewValley.dll" \
+            "$DEPENDENCIES_ROOT/src/DependenciesDll/StardewValley.GameData.dll"
           do
-            test -f "$dll" || { echo "Missing required dependency: $dll"; exit 1; }
+            if [[ ! -f "$dll" ]]; then
+              echo "::error file=$dll,title=Missing game dependency::Missing required dependency: $dll"
+              missing=1
+            fi
           done
+
+          if [[ "$missing" -ne 0 ]]; then
+            printf '%s\n' \
+              'No SMAPI Android dependencies were restored.' \
+              '' \
+              'Configure one of these before running the workflow:' \
+              '- repository variable SMAPI_ANDROID_REPOSITORY pointing to a repository that contains src/DependenciesDll' \
+              '- repository secret SMAPI_ANDROID_DEPENDENCIES_ZIP_BASE64 containing a base64-encoded zip with src/DependenciesDll'
+            exit 1
+          fi
 
       - name: Restore NuGet packages
         working-directory: SMAPILoader
-        run: dotnet restore "$PROJECT_PATH"
+        run: dotnet restore "$PROJECT_PATH" /p:SMAPIAndroidDependenciesRoot="$DEPENDENCIES_ROOT"
 
       - name: Publish APK
         working-directory: SMAPILoader
@@ -94,6 +119,7 @@ jobs:
           --framework net9.0-android
           --no-restore
           /p:AndroidPackageFormat=apk
+          /p:SMAPIAndroidDependenciesRoot="$DEPENDENCIES_ROOT"
 
       - name: Collect APK artifact
         working-directory: SMAPILoader

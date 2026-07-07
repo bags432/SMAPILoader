@@ -16,6 +16,7 @@
 		<!-- Fix for .NET9 -->
 		<NoWarn>$(NoWarn);CS1705;MSB3277</NoWarn>
 		<GenerateRuntimeConfigurationFiles>false</GenerateRuntimeConfigurationFiles>
+		<SMAPIAndroidDependenciesRoot Condition="'$(SMAPIAndroidDependenciesRoot)' == ''">../../SMAPI-Android-1.6</SMAPIAndroidDependenciesRoot>
 
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
@@ -74,14 +75,14 @@
 			<HintPath>..\SharedLibs\MonoMod.Utils.dll</HintPath>
 		</Reference>
 		<Reference Include="MonoGame.Framework">
-			<HintPath>..\..\SMAPI-Android-1.6\src\DependenciesDll\MonoGame.Framework.dll</HintPath>
+			<HintPath>$(SMAPIAndroidDependenciesRoot)/src/DependenciesDll/MonoGame.Framework.dll</HintPath>
 		</Reference>
 		<Reference Include="StardewValley">
-			<HintPath>..\..\SMAPI-Android-1.6\src\DependenciesDll\StardewValley.dll</HintPath>
+			<HintPath>$(SMAPIAndroidDependenciesRoot)/src/DependenciesDll/StardewValley.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 		<Reference Include="StardewValley.GameData">
-			<HintPath>..\..\SMAPI-Android-1.6\src\DependenciesDll\StardewValley.GameData.dll</HintPath>
+			<HintPath>$(SMAPIAndroidDependenciesRoot)/src/DependenciesDll/StardewValley.GameData.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 	</ItemGroup>
