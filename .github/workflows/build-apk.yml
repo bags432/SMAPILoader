@@ -98,3 +98,16 @@ jobs:
       - name: Collect APK artifact
         working-directory: SMAPILoader
         shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          find SMAPIGameLoader/bin/$CONFIGURATION/net9.0-android/publish -type f -name '*.apk' -print -exec cp {} artifacts/ \;
+          test -n "$(find artifacts -type f -name '*.apk' -print -quit)"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SMAPIGameLoader-${{ env.CONFIGURATION }}-apk
+          path: SMAPILoader/artifacts/*.apk
+          if-no-files-found: error
+          retention-days: 14
